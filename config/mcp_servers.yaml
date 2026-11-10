@@ -1,0 +1,3 @@
+# External MCP servers EDITH connects to at startup (loaded by edith/tools/registry.py from Phase 1).
+# Every tool they expose must also get a tier in permissions.yaml, or it defaults to tier 2.
+servers: {}

@@ -1,0 +1,35 @@
+# EDITH main configuration. No secrets here - they live in the OS keychain.
+user:
+  name: "Shivamani"
+  address: "sir"              # what EDITH calls you
+  timezone: "America/New_York"
+  city: ""                    # optional; used in the system prompt context
+
+models:
+  main: claude-sonnet-5-5     # tasks and, in Phase 0, all chat
+  fast: claude-haiku-5-5      # routing, summaries (Phase 1+)
+  deep: claude-opus-5-5       # deep research (Phase 6)
+  local: gemma4:12b           # via Ollama (Phase 6)
+  effort: medium              # low | medium | high | xhigh | max; lower = faster, cheaper chat
+
+agent:
+  max_turns: 25               # agent-loop turn limit per request
+
+budgets:
+  per_request_usd: 0.50       # enforced by the orchestrator from Phase 1
+  per_day_usd: 3.00           # enforced from Phase 0: chat refuses new turns past this
+
+voice:                        # Phase 3
+  wake_word: hey_edith
+  stt_model: small
+  tts: kokoro
+  tts_voice: bf_emma          # British female; bm_george for male
+  follow_up_seconds: 8
+
+files:                        # Phase 1
+  allowed_roots: ["~/Documents", "~/Downloads", "~/Desktop"]
+
+quiet_hours: ["23:00", "07:00"]
+
+paths:
+  data_dir: "~/.edith"        # logs, costs; later memory and audit log

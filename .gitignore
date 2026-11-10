@@ -1,0 +1,30 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Secrets never live in files. These are here only as a last line of defence.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local runtime data (memory, audit log, costs, logs) lives in ~/.edith by default,
+# but guard against a misconfigured data_dir pointing inside the repo.
+data/
+*.jsonl
+*.sqlite
+*.db
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

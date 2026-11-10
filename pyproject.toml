@@ -1,0 +1,63 @@
+[project]
+name = "edith"
+version = "0.0.1"
+description = "EDITH - a personal AI assistant that runs on your own computer."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Direct dependencies are pinned exactly (PLAN.md section 4: the Agent SDK is v0.x and
+# ships weekly). Upgrade on purpose, one dependency at a time, with tests green.
+dependencies = [
+    "claude-agent-sdk==0.2.180",
+    "keyring==25.7.0",
+    "pydantic==2.14.3",
+    "pyyaml==6.0.3",
+    "rich==15.0.0",
+    "structlog==26.1.0",
+    "typer==0.29.0",
+    "tzdata==2026.1",
+]
+
+[project.scripts]
+edith = "edith.interfaces.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["edith"]
+
+[dependency-groups]
+dev = [
+    "mypy==2.4.1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1.post1",
+    "ruff==0.17.4",
+    "types-pyyaml==6.0.12.20261103",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "RUF", "S"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["edith", "tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-q"
