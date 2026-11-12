@@ -210,6 +210,21 @@ async def _ask_questions(ev: QuestionEvent) -> dict[str, str] | None:
     return answers
 
 
+@app.command()
+def serve() -> None:
+    """Run the local API and web page (http://127.0.0.1:8765 by default)."""
+    import uvicorn
+
+    from edith.interfaces.server import create_app
+
+    cfg = _setup()
+    console.print(
+        f"EDITH listening on [bold]http://{cfg.server.host}:{cfg.server.port}[/bold] "
+        "(this computer only). Ctrl+C to quit."
+    )
+    uvicorn.run(create_app(cfg), host=cfg.server.host, port=cfg.server.port, log_level="warning")
+
+
 def _print_costs(cfg: EdithConfig, ledger: CostLedger) -> None:
     t = ledger.totals(tz=user_tz(cfg))
     cap = cfg.budgets.per_day_usd

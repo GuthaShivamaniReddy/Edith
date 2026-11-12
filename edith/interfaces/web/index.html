@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EDITH</title>
+<!-- Self-contained on purpose: no external scripts, fonts or CDNs. Nothing leaves this computer. -->
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #16191d; --muted: #5f6873; --line: #dde1e6;
+    --accent: #0b6bcb; --accent-text: #ffffff; --you: #e8f1fb; --warn-bg: #fff6e0;
+    --warn-line: #e3b341; --bad: #b42318; --good: #1a7f37;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1215; --panel: #171b20; --text: #e6e9ed; --muted: #97a1ac; --line: #2a3038;
+      --accent: #4ea1f3; --accent-text: #0b0d10; --you: #1b2a3a; --warn-bg: #2b2414;
+      --warn-line: #a37f2a; --bad: #ff7b72; --good: #56d364;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .08em; }
+  #status { color: var(--muted); font-size: 13px; flex: 1; }
+  #status.online::before { content: "● "; color: var(--good); }
+  #status.offline::before { content: "● "; color: var(--bad); }
+  button {
+    font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  main { flex: 1; overflow-y: auto; padding: 16px; }
+  #log { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+  .msg { padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .you { background: var(--you); align-self: flex-end; max-width: 85%; }
+  .edith { background: var(--panel); border: 1px solid var(--line); }
+  .meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .tool { color: var(--muted); font-size: 13px; padding-left: 4px; }
+  .tool.fail { color: var(--bad); }
+  .error { color: var(--bad); }
+  .card {
+    background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .card .action { font-weight: 600; margin: 4px 0; overflow-wrap: anywhere; }
+  .card .reason { color: var(--muted); font-size: 13px; }
+  .card .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .card.done { opacity: .6; }
+  .note { border-left: 3px solid var(--accent); padding: 6px 12px; background: var(--panel); }
+  footer { border-top: 1px solid var(--line); background: var(--panel); padding: 12px 16px; }
+  form { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; }
+  textarea {
+    flex: 1; font: inherit; resize: none; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); min-width: 0;
+  }
+  textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EDITH</h1>
+  <span id="status" class="offline">connecting…</span>
+  <button id="grants" type="button" title="What EDITH may access in this session">Access</button>
+</header>
+<main><div id="log" aria-live="polite"></div></main>
+<footer>
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Ask EDITH…  (Enter to send, Shift+Enter for a new line)" aria-label="Message"></textarea>
+    <button id="send" class="primary" type="submit">Send</button>
+    <button id="stop" class="danger" type="button" disabled>Stop</button>
+  </form>
+</footer>
+<script>
+"use strict";
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const statusEl = document.getElementById("status");
+const stopBtn = document.getElementById("stop");
+let ws = null, current = null, busy = false, retry = 500;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;  // never innerHTML: replies are untrusted
+  return e;
+}
+function add(node) {
+  log.appendChild(node);
+  node.scrollIntoView({ block: "end" });
+  return node;
+}
+function setBusy(b) { busy = b; stopBtn.disabled = !b; }
+function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { statusEl.className = "online"; statusEl.textContent = "online"; retry = 500; };
+  ws.onclose = () => {
+    statusEl.className = "offline"; statusEl.textContent = "offline, reconnecting…";
+    setBusy(false); current = null;
+    setTimeout(connect, retry); retry = Math.min(retry * 2, 8000);
+  };
+  ws.onmessage = (m) => handle(JSON.parse(m.data));
+}
+
+function reply() {
+  if (!current) current = add(el("div", "msg edith", ""));
+  return current;
+}
+
+function handle(ev) {
+  switch (ev.type) {
+    case "hello":
+      statusEl.textContent = `online · v${ev.version} · new session (no access granted)`;
+      break;
+    case "token":
+      reply().textContent += ev.text;
+      break;
+    case "tool_start":
+      add(el("div", "tool", "→ " + ev.summary));
+      break;
+    case "tool_end":
+      if (!ev.ok) add(el("div", "tool fail", "✗ " + ev.summary));
+      break;
+    case "confirm_request":
+      confirmCard(ev);
+      break;
+    case "question":
+      questionCard(ev);
+      break;
+    case "notification":
+      add(el("div", "note", `${ev.title}: ${ev.text}`));
+      break;
+    case "final": {
+      const r = reply();
+      if (!r.textContent) r.textContent = ev.text;
+      const u = ev.usage || {};
+      const tokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      r.appendChild(el("div", "meta", `${ev.model} · ${tokens} in / ${u.output_tokens || 0} out · $${ev.cost_usd.toFixed(4)}`));
+      current = null; setBusy(false);
+      break;
+    }
+    case "error":
+      add(el("div", "msg edith error", ev.message));
+      current = null; setBusy(false);
+      break;
+    case "grants":
+      add(el("div", "note", ev.grants.length ? "Access this session:\n" + ev.grants.join("\n") : "No access granted in this session."))
+        .appendChild(revokeButton(ev.grants.length));
+      break;
+  }
+}
+
+function revokeButton(enabled) {
+  const b = el("button", "danger", "Revoke all");
+  b.type = "button"; b.disabled = !enabled; b.style.marginLeft = "12px";
+  b.onclick = () => { send({ type: "revoke" }); b.disabled = true; };
+  return b;
+}
+
+function confirmCard(ev) {
+  const card = add(el("div", "card"));
+  card.appendChild(el("div", "reason", "EDITH wants to:"));
+  card.appendChild(el("div", "action", ev.action));
+  card.appendChild(el("div", "reason", ev.reason));
+  const row = card.appendChild(el("div", "buttons"));
+  const answer = (approved, scope, label) => {
+    send({ type: "confirm", id: ev.id, approved, scope });
+    row.replaceChildren(el("span", "reason", label));
+    card.classList.add("done");
+  };
+  const once = row.appendChild(el("button", "primary", "Allow once"));
+  once.type = "button"; once.onclick = () => answer(true, "once", "Allowed once.");
+  if (ev.allow_session) {
+    const s = row.appendChild(el("button", "", `Allow ${ev.grant_label} for this session`));
+    s.type = "button"; s.onclick = () => answer(true, "session", "Allowed for this session.");
+  }
+  const deny = row.appendChild(el("button", "danger", "Deny"));
+  deny.type = "button"; deny.onclick = () => answer(false, "once", "Denied.");
+  once.focus();
+}
+
+function questionCard(ev) {
+  const card = add(el("div", "card"));
+  const answers = {};
+  const total = ev.questions.length;
+  ev.questions.forEach((q) => {
+    card.appendChild(el("div", "action", q.question));
+    const row = card.appendChild(el("div", "buttons"));
+    (q.options || []).forEach((o) => {
+      const b = row.appendChild(el("button", "", o.label));
+      b.type = "button"; b.title = o.description || "";
+      b.onclick = () => {
+        answers[q.question] = o.label;
+        row.replaceChildren(el("span", "reason", o.label));
+        if (Object.keys(answers).length === total) {
+          send({ type: "answer", id: ev.id, answers });
+          card.classList.add("done");
+        }
+      };
+    });
+  });
+}
+
+document.getElementById("form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  add(el("div", "msg you", text));
+  input.value = "";
+  send({ type: "request", text });
+  if (!busy) { current = null; setBusy(true); }
+};
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("form").requestSubmit(); }
+});
+stopBtn.onclick = () => send({ type: "stop" });
+document.getElementById("grants").onclick = () => send({ type: "grants" });
+connect();
+input.focus();
+</script>
+</body>
+</html>
