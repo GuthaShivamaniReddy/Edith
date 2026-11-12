@@ -13,8 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from send2trash import send2trash
-
 from edith.safety.scope import ScopeError
 from edith.tools.base import ToolContext, ToolError, ToolSpec, schema
 
@@ -137,7 +135,7 @@ async def trash_file(args: dict[str, Any], ctx: ToolContext) -> str:
         raise ToolError(f"{path} does not exist.")
     if any(path == root for root in ctx.scope.allowed):
         raise ToolError("Refusing to trash a whole allowed root folder.")
-    await asyncio.to_thread(send2trash, str(path))
+    await asyncio.to_thread(ctx.adapter.trash, path)
     if path.exists():
         raise ToolError(f"{path} is still there; moving it to the trash failed.")
     return f"Moved {path} to the Recycle Bin (restore it from there if needed)."

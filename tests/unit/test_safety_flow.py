@@ -27,7 +27,6 @@ from edith.core.events import (
 from edith.core.orchestrator import Orchestrator
 from edith.safety.confirm import GrantScope
 from edith.safety.policy import Permissions
-from edith.tools import files as files_tools
 from edith.tools.system.fake import FakeAdapter
 from tests.fakes import FakeFactory, Hang, ToolCall, events_of, fake_orchestrator, text_turn
 
@@ -69,12 +68,6 @@ def audit(orch: Orchestrator) -> list[dict[str, Any]]:
 
 def read_call(path: Path, tid: str = "t1") -> ToolCall:
     return ToolCall("mcp__files__read", {"path": str(path)}, tid)
-
-
-@pytest.fixture(autouse=True)
-def no_real_trash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """files.trash must never touch the real Recycle Bin in tests."""
-    monkeypatch.setattr(files_tools, "send2trash", lambda p: Path(p).unlink())
 
 
 async def test_tier0_runs_without_asking(tool_cfg: EdithConfig, permissions: Permissions) -> None:

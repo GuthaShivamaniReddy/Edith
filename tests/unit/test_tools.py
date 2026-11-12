@@ -12,7 +12,6 @@ from edith.core.events import NotificationEvent
 from edith.safety.audit import AuditLog
 from edith.safety.policy import Permissions
 from edith.safety.scope import FileScope
-from edith.tools import files as files_tools
 from edith.tools.base import ToolContext, ToolSpec
 from edith.tools.registry import RegistryError, ToolRegistry, default_specs
 from edith.tools.system.fake import FakeAdapter
@@ -183,14 +182,13 @@ async def test_files_read_rejects_binary_and_later_phase(
 
 
 async def test_trash_refuses_root_and_missing(
-    registry: ToolRegistry, sandbox: Path, monkeypatch: pytest.MonkeyPatch
+    registry: ToolRegistry, sandbox: Path, adapter: FakeAdapter
 ) -> None:
-    monkeypatch.setattr(files_tools, "send2trash", lambda p: Path(p).unlink())
     assert not (await registry.call("files.trash", {"path": str(sandbox)}))[0]
     assert not (await registry.call("files.trash", {"path": str(sandbox / "nope.txt")}))[0]
     target = sandbox / "docs" / "todo.txt"
     assert (await registry.call("files.trash", {"path": str(target)}))[0]
-    assert not target.exists()
+    assert not target.exists() and adapter.trashed == [target.resolve()]
 
 
 # ---------------------------------------------------------------- notes

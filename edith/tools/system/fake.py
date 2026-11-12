@@ -18,6 +18,7 @@ class FakeAdapter(SystemAdapter):
         self.opened_urls: list[str] = []
         self.clipboard = ""
         self.screenshots: list[Path] = []
+        self.trashed: list[Path] = []
 
     def get_volume(self) -> int:
         return self.volume
@@ -39,6 +40,16 @@ class FakeAdapter(SystemAdapter):
         path.write_bytes(b"\x89PNG fake")
         self.screenshots.append(path)
         return path
+
+    def trash(self, path: Path) -> None:
+        """Deletes for real (tests/evals use temp folders) but never touches the Recycle Bin."""
+        if path.is_dir():
+            import shutil
+
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+        self.trashed.append(path)
 
     def clipboard_read(self) -> str:
         return self.clipboard

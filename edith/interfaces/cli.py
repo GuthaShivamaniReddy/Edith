@@ -225,6 +225,22 @@ def serve() -> None:
     uvicorn.run(create_app(cfg), host=cfg.server.host, port=cfg.server.port, log_level="warning")
 
 
+@app.command("eval")
+def eval_(
+    only: Annotated[
+        str | None, typer.Option(help="Comma-separated scenario ids or tags to run.")
+    ] = None,
+    threshold: Annotated[float, typer.Option(help="Pass rate needed (0-1).")] = 0.85,
+    max_cost: Annotated[float, typer.Option(help="Stop the run past this spend (USD).")] = 3.0,
+    list_only: Annotated[bool, typer.Option("--list", help="List scenarios, run nothing.")] = False,
+) -> None:
+    """Run the task evaluation suite. Uses the real model: it costs money."""
+    from edith.evals.report import run_suite
+
+    cfg = _setup()
+    raise typer.Exit(asyncio.run(run_suite(cfg, console, only, threshold, max_cost, list_only)))
+
+
 def _print_costs(cfg: EdithConfig, ledger: CostLedger) -> None:
     t = ledger.totals(tz=user_tz(cfg))
     cap = cfg.budgets.per_day_usd

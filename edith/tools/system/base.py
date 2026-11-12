@@ -17,6 +17,7 @@ import mss
 import mss.tools
 import psutil
 import pyperclip
+from send2trash import send2trash
 
 
 class AdapterError(RuntimeError):
@@ -56,6 +57,10 @@ class SystemAdapter(ABC):
             shot = sct.grab(sct.monitors[0])  # all monitors
             mss.tools.to_png(shot.rgb, shot.size, output=str(path))
         return path
+
+    def trash(self, path: Path) -> None:
+        """Move to the Recycle Bin / Trash. Never a permanent delete."""
+        send2trash(str(path))
 
     def clipboard_read(self) -> str:
         return str(pyperclip.paste())
