@@ -18,8 +18,11 @@ openWakeWord, Silero VAD, faster-whisper, Kokoro, APScheduler, pytest.
 - Shell commands are fixed templates with validated arguments, never raw strings
   from the model.
 - Never run destructive commands (rm -rf, format, registry edits) on this machine.
-- ClaudeBrain runs with tools=[], setting_sources=[], strict_mcp_config=True until
-  the Phase 1 safety gate is wired in. Do not give the brain tools before that.
+- Every tool call goes through the SafetyGate (PreToolUse hook + can_use_tool, ADR 0011).
+  Built-ins stay limited to WebSearch, WebFetch, AskUserQuestion; allowed_tools=[],
+  setting_sources=[], strict_mcp_config=True. Never pre-approve a tool.
+- Privacy: no access to files, clipboard, screen or system info without a user grant;
+  local data never goes outbound without a confirmation showing what is sent.
 
 ## Code standards
 - Type hints everywhere; ruff + mypy (strict) clean; async I/O.
@@ -33,9 +36,10 @@ openWakeWord, Silero VAD, faster-whisper, Kokoro, APScheduler, pytest.
 - uv run pytest            # tests
 - uv run ruff format . && uv run ruff check . && uv run mypy   # what CI runs
 - uv run edith chat        # talk to EDITH in the terminal
+- uv run edith serve       # local WebSocket API + web page on http://127.0.0.1:8765
 - uv run edith status      # config, credentials, CLI check (no model call)
 - uv run edith costs       # today's and this month's spend
-- uv run edith eval        # task evaluation suite (Phase 1)
+- uv run edith eval        # task eval suite: REAL model, costs money (--only, --max-cost, --list)
 
 ## Lessons learned
 (append here at the end of each phase)
@@ -50,3 +54,12 @@ openWakeWord, Silero VAD, faster-whisper, Kokoro, APScheduler, pytest.
 - Windows needs the tzdata package for zoneinfo.
 - uv writes a .gitignore inside .venv, so ripgrep-based search skips installed
   packages; read SDK sources with a direct path instead.
+
+### Phase 1
+- The SDK sends "ask" from a PreToolUse hook on to can_use_tool; that is where the
+  confirmation waits. tests/fakes.py drives scripted ToolCalls through the same hooks.
+- Anything a tool does to the real machine (even moving to the Recycle Bin) must go
+  through SystemAdapter, so tests and evals can use FakeAdapter.
+- Router keywords are cheap but blunt: "today" routed greetings to Sonnet at 20x cost.
+  Add each misroute the evals find as a router test.
+- Eval prompts use {sandbox} for the temp folder; never point evals at real folders.
