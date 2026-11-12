@@ -8,8 +8,15 @@ import keyring.backend
 import keyring.errors
 import pytest
 
-from edith.config import EdithConfig, load_config
+from edith.config import (
+    DEFAULT_CONFIG_DIR,
+    EdithConfig,
+    FilesConfig,
+    SafetyConfig,
+    load_config,
+)
 from edith.safety import secrets
+from edith.safety.policy import Permissions
 
 MINIMAL_CONFIG = """
 user:
@@ -78,3 +85,34 @@ def config_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def cfg(config_file: Path) -> EdithConfig:
     return load_config(config_file)
+
+
+@pytest.fixture
+def permissions() -> Permissions:
+    """The real policy file from the repo: tests check the policy the user approved."""
+    return Permissions.load(DEFAULT_CONFIG_DIR / "permissions.yaml")
+
+
+@pytest.fixture
+def sandbox(tmp_path: Path) -> Path:
+    """A folder EDITH may ask to access (never the developer's real home)."""
+    root = tmp_path / "sandbox"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "todo.txt").write_text("buy milk\ncall mom\n", encoding="utf-8")
+    (root / "secret").mkdir()
+    (root / "secret" / "salary.txt").write_text("classified", encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def tool_cfg(cfg: EdithConfig, sandbox: Path) -> EdithConfig:
+    """Config with file scope pointed at the sandbox, a blocked subfolder and two apps."""
+    return cfg.model_copy(
+        update={
+            "files": FilesConfig(
+                allowed_roots=[str(sandbox)], blocked_roots=[str(sandbox / "secret")]
+            ),
+            "apps": {"notepad": "notepad.exe", "calculator": "calc.exe"},
+            "safety": SafetyConfig(confirm_timeout_s=2),
+        }
+    )

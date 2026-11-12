@@ -56,6 +56,28 @@ class Usage:
         return self.input_tokens + self.cache_read_input_tokens + self.cache_creation_input_tokens
 
 
+# USD per million tokens (input, output), PLAN.md section 10. Used only to *estimate*
+# spend while a reply is still streaming, so the per-request cap can stop it early;
+# the recorded cost always comes from the SDK. Cache reads are priced at 10% of input
+# and cache writes at 125% (conservative), unknown models at Opus rates.
+PRICES: dict[str, tuple[float, float]] = {
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-opus-5-5": (4.00, 20.00),
+}
+_DEFAULT_PRICE = PRICES["claude-opus-5-5"]
+
+
+def estimate_cost(model: str, usage: Usage) -> float:
+    inp, out = PRICES.get(model, _DEFAULT_PRICE)
+    return (
+        usage.input_tokens * inp
+        + usage.cache_read_input_tokens * inp * 0.10
+        + usage.cache_creation_input_tokens * inp * 1.25
+        + usage.output_tokens * out
+    ) / 1e6
+
+
 @dataclass(frozen=True)
 class CostRecord:
     cost_usd: float

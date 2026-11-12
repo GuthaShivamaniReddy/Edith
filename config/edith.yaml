@@ -26,8 +26,31 @@ voice:                        # Phase 3
   tts_voice: bf_emma          # British female; bm_george for male
   follow_up_seconds: 8
 
-files:                        # Phase 1
+files:
+  # Folders EDITH may ASK to read. Nothing is readable until you approve it in a prompt
+  # ("once" or "for this session"); every new session starts with no access.
   allowed_roots: ["~/Documents", "~/Downloads", "~/Desktop"]
+  # Folders EDITH can never read, list or trash, even if you approve. Put work folders here.
+  blocked_roots: []
+
+# Apps EDITH can open, by name. It cannot launch anything not listed here.
+apps:
+  notepad: notepad.exe
+  calculator: calc.exe
+  paint: mspaint.exe
+  explorer: explorer.exe
+  task manager: taskmgr.exe
+  settings: "ms-settings:"
+
+server:
+  host: 127.0.0.1             # the API never listens beyond this computer
+  port: 8765
+
+safety:
+  confirm_timeout_s: 120      # unanswered confirmations are refused
+
+privacy:
+  disable_cli_telemetry: true # no Claude Code telemetry / error reports from EDITH
 
 quiet_hours: ["23:00", "07:00"]
 

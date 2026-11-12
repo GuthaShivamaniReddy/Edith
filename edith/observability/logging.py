@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import uuid
 from collections.abc import MutableMapping
 from pathlib import Path
@@ -17,44 +16,16 @@ from typing import Any, TextIO
 
 import structlog
 
-from edith.safety.secrets import known_secret_values
-
-# Keys whose *last word* names a secret: api_key, access_token, client_secret, password...
-# Anchored so counters like input_tokens / output_tokens are not masked.
-_SECRET_KEY = re.compile(
-    r"(?:^|[_-])(?:api[_-]?key|apikey|token|secret|password|passwd|authorization|auth|cookie)$",
-    re.IGNORECASE,
-)
-REDACTED = "***"
+from edith.safety.redact import REDACTED, SECRET_KEY, redact
 
 _log_file: TextIO | None = None
-
-
-def _redact_value(value: Any, secrets: frozenset[str]) -> Any:
-    if isinstance(value, str):
-        for s in secrets:
-            if s and s in value:
-                value = value.replace(s, REDACTED)
-        return value
-    if isinstance(value, dict):
-        return {
-            k: REDACTED if _SECRET_KEY.search(str(k)) else _redact_value(v, secrets)
-            for k, v in value.items()
-        }
-    if isinstance(value, list | tuple):
-        return type(value)(_redact_value(v, secrets) for v in value)
-    return value
 
 
 def redact_secrets(
     _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    secrets = known_secret_values()
     for key in list(event_dict):
-        if _SECRET_KEY.search(key):
-            event_dict[key] = REDACTED
-        else:
-            event_dict[key] = _redact_value(event_dict[key], secrets)
+        event_dict[key] = REDACTED if SECRET_KEY.search(key) else redact(event_dict[key])
     return event_dict
 
 

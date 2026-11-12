@@ -21,6 +21,8 @@ class BrainError(RuntimeError):
 class Brain(ABC):
     """A conversational session. Use as an async context manager."""
 
+    model: str
+
     @abstractmethod
     async def start(self) -> None: ...
 
@@ -28,7 +30,12 @@ class Brain(ABC):
     async def close(self) -> None: ...
 
     @abstractmethod
-    def run(self, request: Request) -> AsyncIterator[Event]:
+    def run(
+        self,
+        request: Request,
+        model: str | None = None,
+        max_cost_usd: float | None = None,
+    ) -> AsyncIterator[Event]:
         """Stream events for one request. Ends after a FinalEvent or ErrorEvent."""
 
     @abstractmethod

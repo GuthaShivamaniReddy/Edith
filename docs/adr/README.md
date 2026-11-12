@@ -16,3 +16,4 @@ supersedes the old one rather than editing history.
 | [0008](0008-ship-vertical-slices.md) | Ship vertical slices |
 | [0009](0009-measure-everything.md) | Measure everything |
 | [0010](0010-phase-0-runtime-decisions.md) | Phase 0 runtime decisions |
+| [0011](0011-phase-1-safety-and-tools.md) | Phase 1: safety gate, privacy grants, tools and routing |

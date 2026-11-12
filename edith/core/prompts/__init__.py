@@ -17,6 +17,7 @@ _SOURCE_LABEL: dict[Source, str] = {
     "desktop": "desktop",
     "telegram": "phone",
     "scheduler": "scheduler",
+    "eval": "terminal",
 }
 
 

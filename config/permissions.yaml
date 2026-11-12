@@ -1,22 +1,83 @@
-# Tool -> permission tier map (PLAN.md section 7). Enforced by edith/safety/policy.py from Phase 1.
-#   0 = read (runs, logged)      1 = reversible (runs, logged, undo offered)
-#   2 = consequential (asks)     3 = forbidden (refused)
+# EDITH permission policy (PLAN.md section 7 + the privacy rules). Enforced by edith/safety/policy.py.
 # Changes to this file need the user's explicit approval (CLAUDE.md hard rules).
-default_tier: 2               # anything unlisted asks first
+#
+# Tiers:  0 = read (runs, logged)       1 = reversible (runs, logged)
+#         2 = consequential (asks)      3 = forbidden (always refused)
+# Anything not listed is tier 2. Every in-process tool must be listed or EDITH refuses to start.
+default_tier: 2
+
 tools:
+  question.ask: 0          # clarifying questions back to you
   web.search: 0
+  web.fetch: 0
+  web.open_url: 1
+  files.list: 0
+  files.search: 0
   files.read: 0
-  calendar.list_events: 0
+  files.trash: 2           # moves to the Recycle Bin, never permanent delete
   system.stats: 0
+  system.get_volume: 0
   system.set_volume: 1
+  system.mute: 1
+  system.screenshot: 1
   apps.open: 1
+  clipboard.read: 0
+  clipboard.write: 1
   notes.create: 1
-  music.play: 1
+  notes.list: 0
+  notes.read: 0
+  timers.set: 1
+  timers.list: 0
+  timers.cancel: 1
+  activity.today: 0
+  # Later phases
+  calendar.list_events: 0
   calendar.create_event: 2
   email.send: 2
-  files.trash: 2
-  shell.run: 2
+  shell.*: 2
   browser.submit_form: 2
   home.unlock_door: 2
   payments.*: 3
   security.*: 3
+
+# PRIVACY: tools that touch your computer's data need an access grant from you first,
+# no matter their tier. Every session starts with no grants.
+#   scope: what you are granting       session: may "allow for this session" (else once only)
+access:
+  files.list:     {scope: files, session: true}
+  files.search:   {scope: files, session: true}
+  files.read:     {scope: files, session: true}
+  files.trash:    {scope: files, session: false}
+  system.stats:   {scope: system_info, session: true}
+  clipboard.read: {scope: clipboard, session: false}   # no passive clipboard watching
+  system.screenshot: {scope: screen, session: false}   # no passive screen watching
+
+# PRIVACY: tools whose output contains data from this computer. After one of these runs,
+# every outbound tool below needs your confirmation, showing exactly what would be sent.
+local_data:
+  - files.list
+  - files.search
+  - files.read
+  - clipboard.read
+  - system.screenshot
+  - system.stats
+  - notes.list
+  - notes.read
+  - activity.today
+
+# Tools that send data off this computer (to the web).
+outbound:
+  - web.search
+  - web.fetch
+  - web.open_url
+
+# Tools whose output is untrusted content (web pages, files, clipboard). After one runs,
+# tier-1 actions in the same request are raised to tier 2 (prompt-injection defence).
+untrusted_output:
+  - web.search
+  - web.fetch
+  - files.list
+  - files.search
+  - files.read
+  - clipboard.read
+  - notes.read

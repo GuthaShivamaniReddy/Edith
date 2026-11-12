@@ -57,7 +57,34 @@ class VoiceConfig(_Strict):
 
 
 class FilesConfig(_Strict):
+    # Folders EDITH may *ask* to read. Nothing is readable until you approve it.
     allowed_roots: list[str] = Field(default_factory=list)
+    # Folders EDITH can never touch, even if you approve (e.g. your work folder).
+    blocked_roots: list[str] = Field(default_factory=list)
+
+    def resolved_allowed(self) -> list[Path]:
+        return [_resolve_dir(p) for p in self.allowed_roots]
+
+    def resolved_blocked(self) -> list[Path]:
+        return [_resolve_dir(p) for p in self.blocked_roots]
+
+
+def _resolve_dir(p: str) -> Path:
+    return Path(os.path.expandvars(p)).expanduser().resolve()
+
+
+class ServerConfig(_Strict):
+    host: Literal["127.0.0.1", "localhost", "::1"] = "127.0.0.1"  # loopback only, by design
+    port: int = Field(default=8765, ge=1024, le=65535)
+
+
+class SafetyConfig(_Strict):
+    confirm_timeout_s: float = Field(default=120, gt=0)  # silence is a no
+
+
+class PrivacyConfig(_Strict):
+    # Turn off Claude Code's telemetry, error reporting and other non-essential traffic.
+    disable_cli_telemetry: bool = True
 
 
 class PathsConfig(_Strict):
@@ -76,6 +103,11 @@ class EdithConfig(_Strict):
     budgets: BudgetsConfig = BudgetsConfig()
     voice: VoiceConfig = VoiceConfig()
     files: FilesConfig = FilesConfig()
+    # App name -> launch target. EDITH can open only these (fixed templates, no shell).
+    apps: dict[str, str] = Field(default_factory=dict)
+    server: ServerConfig = ServerConfig()
+    safety: SafetyConfig = SafetyConfig()
+    privacy: PrivacyConfig = PrivacyConfig()
     quiet_hours: tuple[str, str] = ("23:00", "07:00")
     paths: PathsConfig = PathsConfig()
 
@@ -86,6 +118,10 @@ class EdithConfig(_Strict):
     @property
     def log_dir(self) -> Path:
         return self.data_dir / "logs"
+
+    @property
+    def notes_dir(self) -> Path:
+        return self.data_dir / "notes"
 
 
 class ConfigError(RuntimeError):
