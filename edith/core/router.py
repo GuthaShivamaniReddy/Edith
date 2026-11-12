@@ -32,7 +32,7 @@ _TASK = re.compile(
     r"timer|alarm|find|search|look up|lookup|read|list|show|summari[sz]e|delete|remove|trash|"
     r"move|copy|paste|clipboard|screenshot|screen|volume|mute|unmute|file|files|folder|"
     r"document|download|send|email|calendar|schedule|book|buy|plan|cpu|memory|disk|battery|"
-    r"computer|system|today|tonight|tomorrow|latest|news|current|currently|now|price|"
+    r"computer|system|latest|news|current|currently|right now|price|"
     r"weather|score|stock|update|install|run|code|script|fix|debug|did you do)\b",
     re.IGNORECASE,
 )

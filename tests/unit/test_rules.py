@@ -66,6 +66,9 @@ def test_open_requests_go_to_model() -> None:
     ("text", "kind", "model"),
     [
         ("hi", "quick_answer", "claude-haiku-5-5"),
+        ("Hi EDITH, how are you today?", "quick_answer", "claude-haiku-5-5"),
+        ("what's the weather today", "task", "claude-sonnet-5-5"),
+        ("who is the CEO of OpenAI right now", "task", "claude-sonnet-5-5"),
         ("what is the capital of France", "quick_answer", "claude-haiku-5-5"),
         ("open notepad", "task", "claude-sonnet-5-5"),
         ("what's the latest news on the election", "task", "claude-sonnet-5-5"),
