@@ -95,8 +95,9 @@ class ServerThread:
                 raise DesktopError("The EDITH server did not start in time.")
             time.sleep(0.05)
 
-    def stop(self, timeout: float = 10.0) -> None:
-        self.server.should_exit = True  # lifespan shutdown closes the orchestrator
+    def stop(self, timeout: float = 30.0) -> None:
+        # Lifespan shutdown closes the orchestrator, which learns from open sessions first.
+        self.server.should_exit = True
         self._thread.join(timeout)
 
 
