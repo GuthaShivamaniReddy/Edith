@@ -363,7 +363,8 @@
 - id: web-search-python
   tags: [web]
   prompt: "What is the latest stable release of Python? Look it up."
-  expect_tools: [web.search]
+  # Fetching python.org/downloads directly is as good as searching.
+  expect_any_tool: [web.search, web.fetch]
   answer_contains: ["3.1"]
 
 - id: web-search-news
