@@ -50,6 +50,7 @@ from edith.core.events import (
     TokenEvent,
 )
 from edith.core.prompts import render_system_prompt
+from edith.memory.extractor import Completion
 from edith.observability.costs import Usage, estimate_cost
 from edith.observability.logging import get_logger
 from edith.safety.gate import SafetyGate
@@ -281,7 +282,7 @@ class ClaudeBrain(Brain):
         model = state.model
         assistant_error: str | None = None
         try:
-            await client.query(state.request.text)
+            await client.query(compose_prompt(state.request))
             async for msg in client.receive_response():
                 if isinstance(msg, StreamEvent):
                     ev = msg.event
@@ -444,6 +445,13 @@ class ClaudeBrain(Brain):
         return cast(HookJSONOutput, {})
 
 
+def compose_prompt(request: Request) -> str:
+    """The user's message, with memories (if any) in a tagged block before it."""
+    if not request.context:
+        return request.text
+    return f"<memory>\n{request.context}\n</memory>\n\n{request.text}"
+
+
 async def _drop(_event: Event) -> None:
     return None
 
@@ -505,3 +513,72 @@ def _error_event(
         text = f"The request failed: {detail}"
         retryable = msg.api_error_status in {429, 500, 502, 503, 529}
     return ErrorEvent(text, retryable=retryable, cost_usd=cost, usage=usage)
+
+
+# ---------------------------------------------------------------------- one-shot calls
+
+
+async def _deny_tool(
+    tool_name: str, _input: dict[str, Any], _ctx: ToolPermissionContext
+) -> PermissionResultAllow | PermissionResultDeny:
+    return PermissionResultDeny(message=f"{tool_name}: no tools in this call.")
+
+
+async def _deny_hook(input_data: Any, _tool_use_id: str | None, _ctx: Any) -> HookJSONOutput:
+    return _hook_decision("deny", "No tools in this call.")
+
+
+async def complete_once(
+    cfg: EdithConfig,
+    system: str,
+    prompt: str,
+    model: str,
+    client_factory: ClientFactory = _default_factory,
+) -> Completion:
+    """One model turn with no tools at all (memory extraction and similar chores).
+
+    Same credentials, telemetry settings and isolation as ClaudeBrain; every tool is
+    off (`--tools ""`) and any tool call that slipped through would be denied.
+    """
+    env, _ = credential_env()
+    if cfg.privacy.disable_cli_telemetry:
+        env = {**env, **TELEMETRY_OFF}
+    workspace = cfg.data_dir / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    options = ClaudeAgentOptions(
+        model=model,
+        system_prompt=system,
+        tools=[],
+        allowed_tools=[],
+        mcp_servers={},
+        strict_mcp_config=True,
+        setting_sources=[],
+        permission_mode="default",
+        hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[_deny_hook])]},
+        can_use_tool=_deny_tool,
+        max_turns=1,
+        cwd=str(workspace),
+        env=env,
+        stderr=lambda line: log.debug("claude_cli_stderr", line=line),
+    )
+    client = client_factory(options)
+    try:
+        await client.connect()
+    except ClaudeSDKError as e:
+        raise BrainError(f"Could not start the Claude session: {e}") from e
+    parts: list[str] = []
+    cost, usage = 0.0, Usage()
+    try:
+        await client.query(prompt)
+        async for msg in client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                parts += [b.text for b in msg.content if isinstance(b, TextBlock)]
+            elif isinstance(msg, ResultMessage):
+                cost = float(msg.total_cost_usd or 0.0)
+                usage = Usage.from_api(msg.usage)
+                if msg.is_error:
+                    raise BrainError(f"The request failed: {msg.result or msg.subtype}")
+    finally:
+        with contextlib.suppress(ClaudeSDKError):
+            await client.disconnect()
+    return Completion("".join(parts), cost, usage, model)

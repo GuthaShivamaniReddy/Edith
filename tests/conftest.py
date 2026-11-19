@@ -70,6 +70,8 @@ def memory_keyring() -> Iterator[MemoryKeyring]:
 def isolated_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Never read the developer's real data dir or config overrides during tests."""
     monkeypatch.setenv("EDITH_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("EDITH_FAKE_EMBED", "1")  # offline hashing embedder, no model download
+    monkeypatch.setenv("EDITH_MODELS_DIR", str(tmp_path / "models"))
     monkeypatch.delenv("EDITH_CONFIG_DIR", raising=False)
     monkeypatch.delenv("EDITH_LOG_LEVEL", raising=False)
 

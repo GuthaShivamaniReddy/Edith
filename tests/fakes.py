@@ -23,6 +23,8 @@ from edith.core.brain import Brain
 from edith.core.brain.claude_brain import ClaudeBrain, SDKClient
 from edith.core.events import Source
 from edith.core.orchestrator import Orchestrator
+from edith.memory.extractor import Completion
+from edith.observability.costs import Usage
 from edith.safety.gate import SafetyGate
 from edith.safety.policy import Permissions, policy_name
 from edith.tools.system.fake import FakeAdapter
@@ -243,11 +245,26 @@ def tool_result(text: str, ok: bool = True) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "is_error": not ok}
 
 
+class FakeComplete:
+    """Stands in for complete_once: returns scripted text, records every prompt."""
+
+    def __init__(self, *replies: str, cost_usd: float = 0.0005) -> None:
+        self.replies = list(replies) or ['{"facts": [], "summary": ""}']
+        self.calls: list[tuple[str, str, str]] = []
+        self.cost_usd = cost_usd
+
+    async def __call__(self, system: str, prompt: str, model: str) -> Completion:
+        self.calls.append((system, prompt, model))
+        text = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return Completion(text, self.cost_usd, Usage(input_tokens=200, output_tokens=40), model)
+
+
 def fake_orchestrator(
     cfg: EdithConfig,
     permissions: Permissions,
     *turns: Sequence[Step],
     adapter: FakeAdapter | None = None,
+    complete: FakeComplete | None = None,
 ) -> tuple[Orchestrator, FakeFactory]:
     """An Orchestrator whose brains talk to the scripted fake client.
 
@@ -274,5 +291,6 @@ def fake_orchestrator(
         adapter=adapter or FakeAdapter(),
         permissions=permissions,
         brain_factory=brain_factory,
+        complete=complete or FakeComplete(),
     )
     return orch, factory

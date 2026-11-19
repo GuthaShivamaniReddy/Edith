@@ -53,7 +53,15 @@ safety:
 privacy:
   disable_cli_telemetry: true # no Claude Code telemetry / error reports from EDITH
 
+memory:
+  enabled: true
+  auto_extract: true          # after each conversation, learn facts from YOUR messages only
+  embed_model: BAAI/bge-small-en-v1.5   # runs locally; downloaded once to ~/.edith/models
+  inject_all_up_to: 25        # send all facts with each request while there are this few
+  inject_top_k: 8             # otherwise the most relevant ones
+  inject_episodes: 3          # recent conversation summaries
+
 quiet_hours: ["23:00", "07:00"]
 
 paths:
-  data_dir: "~/.edith"        # logs, costs; later memory and audit log
+  data_dir: "~/.edith"        # logs, costs, audit log, notes, memory.db

@@ -20,6 +20,7 @@ from claude_agent_sdk import McpServerConfig, SdkMcpTool, create_sdk_mcp_server,
 from edith.observability.logging import get_logger
 from edith.safety.policy import Permissions
 from edith.tools import activity, files, notes, timers
+from edith.tools import memory as memory_tools
 from edith.tools.base import ToolContext, ToolError, ToolSpec
 from edith.tools.system import tools as system_tools
 
@@ -45,6 +46,7 @@ def default_specs() -> list[ToolSpec]:
         *notes.specs(),
         *timers.specs(),
         *activity.specs(),
+        *memory_tools.specs(),
     ]
 
 
@@ -70,6 +72,8 @@ class ToolRegistry:
         self.ctx = ctx
         self.permissions = permissions
         all_specs = default_specs() if specs is None else specs
+        if ctx.memory is None:  # memory switched off: its tools do not exist
+            all_specs = [s for s in all_specs if s.group not in memory_tools.GROUPS]
         self.specs: dict[str, ToolSpec] = {
             s.policy_name: s for s in all_specs if sys.platform in s.platforms
         }
@@ -94,7 +98,7 @@ class ToolRegistry:
         """Human description of the exact action, for confirmations and the UI."""
         spec = self.specs.get(name)
         if spec is not None:
-            return spec.action(args)
+            return spec.action(args, self.ctx)
         if name in _BUILTIN_ACTIONS:
             return _BUILTIN_ACTIONS[name](args)
         return f"{name} {json.dumps(args, ensure_ascii=False)[:300]}"

@@ -21,6 +21,7 @@ class Request:
     source: Source = "cli"
     session_id: str = "default"
     private: bool = False
+    context: str = ""  # memories attached by the orchestrator; never routed on
 
 
 @dataclass(frozen=True)

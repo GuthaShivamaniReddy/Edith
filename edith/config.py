@@ -87,6 +87,18 @@ class PrivacyConfig(_Strict):
     disable_cli_telemetry: bool = True
 
 
+class MemoryConfig(_Strict):
+    enabled: bool = True
+    # After each conversation, the fast model pulls facts from YOUR messages only.
+    auto_extract: bool = True
+    embed_model: str = "BAAI/bge-small-en-v1.5"  # local, via fastembed (ONNX)
+    # Facts added to each request: all of them while there are at most this many...
+    inject_all_up_to: int = Field(default=25, ge=0, le=200)
+    # ...otherwise the most relevant ones.
+    inject_top_k: int = Field(default=8, ge=0, le=50)
+    inject_episodes: int = Field(default=3, ge=0, le=20)  # recent conversation summaries
+
+
 class PathsConfig(_Strict):
     data_dir: Path = Path("~/.edith")
 
@@ -108,6 +120,7 @@ class EdithConfig(_Strict):
     server: ServerConfig = ServerConfig()
     safety: SafetyConfig = SafetyConfig()
     privacy: PrivacyConfig = PrivacyConfig()
+    memory: MemoryConfig = MemoryConfig()
     quiet_hours: tuple[str, str] = ("23:00", "07:00")
     paths: PathsConfig = PathsConfig()
 
@@ -122,6 +135,16 @@ class EdithConfig(_Strict):
     @property
     def notes_dir(self) -> Path:
         return self.data_dir / "notes"
+
+    @property
+    def memory_db(self) -> Path:
+        return self.data_dir / "memory.db"
+
+    @property
+    def models_dir(self) -> Path:
+        """Downloaded local models. Shared by evals (not part of a temp data dir)."""
+        override = os.environ.get("EDITH_MODELS_DIR")
+        return Path(override).expanduser() if override else Path("~/.edith/models").expanduser()
 
 
 class ConfigError(RuntimeError):

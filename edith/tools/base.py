@@ -18,6 +18,7 @@ from edith.safety.audit import AuditLog
 from edith.safety.scope import FileScope
 
 if TYPE_CHECKING:
+    from edith.memory.store import MemoryStore
     from edith.tools.system.base import SystemAdapter
     from edith.tools.timers import TimerService
 
@@ -35,10 +36,12 @@ class ToolContext:
     scope: FileScope
     timers: TimerService
     audit: AuditLog
+    memory: MemoryStore | None = None  # None when memory.enabled is false
 
 
 Handler = Callable[[dict[str, Any], ToolContext], Awaitable[str]]
 Describer = Callable[[dict[str, Any]], str]
+ContextDescriber = Callable[[dict[str, Any], "ToolContext"], str]
 
 
 def schema(
@@ -61,6 +64,7 @@ class ToolSpec:
     input_schema: dict[str, Any]
     handler: Handler
     describe: Describer | None = None  # the exact action, shown in confirmations
+    describe_ctx: ContextDescriber | None = None  # same, when it needs to look things up
     platforms: frozenset[str] = field(default=ALL_PLATFORMS)
     needs_network: bool = False
     timeout_s: float = 15.0
@@ -69,10 +73,12 @@ class ToolSpec:
     def policy_name(self) -> str:
         return f"{self.group}.{self.name}"
 
-    def action(self, args: dict[str, Any]) -> str:
-        if self.describe is not None:
-            try:
+    def action(self, args: dict[str, Any], ctx: ToolContext | None = None) -> str:
+        try:
+            if self.describe_ctx is not None and ctx is not None:
+                return self.describe_ctx(args, ctx)
+            if self.describe is not None:
                 return self.describe(args)
-            except (KeyError, TypeError, ValueError):
-                pass
+        except (KeyError, TypeError, ValueError):
+            pass
         return f"{self.policy_name} {json.dumps(args, ensure_ascii=False)[:300]}"

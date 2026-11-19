@@ -51,6 +51,12 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SeedFact(_Strict):
+    text: str
+    kind: str = "fact"
+    days_ago: float = 0
+
+
 class Setup(_Strict):
     files: dict[str, str] = Field(default_factory=dict)  # sandbox-relative path -> text
     clipboard: str = ""
@@ -59,6 +65,10 @@ class Setup(_Strict):
     notes: dict[str, str] = Field(default_factory=dict)  # title -> body
     timers: dict[str, float] = Field(default_factory=dict)  # label -> seconds
     audit: list[dict[str, Any]] = Field(default_factory=list)  # outcome entries
+    memories: list[SeedFact] = Field(default_factory=list)  # saved before the "restart"
+    pdfs: dict[str, list[str]] = Field(default_factory=dict)  # sandbox path -> page texts
+    docx: dict[str, list[str]] = Field(default_factory=dict)  # sandbox path -> paragraphs
+    index: list[str] = Field(default_factory=list)  # sandbox folders to index
 
 
 class ExpectState(_Strict):
@@ -73,6 +83,8 @@ class ExpectState(_Strict):
     note_contains: str | None = None
     timers_running: int | None = None
     screenshots: int | None = None
+    memory_contains: list[str] = Field(default_factory=list)  # some fact contains each
+    memory_missing: list[str] = Field(default_factory=list)  # no fact contains any
 
 
 class Scenario(_Strict):
@@ -132,6 +144,7 @@ class Run:
     cost_usd: float = 0.0
     timed_out: bool = False
     timers_running: int = 0
+    facts: list[str] = field(default_factory=list)  # memory after the run
 
 
 OrchestratorFactory = Callable[[EdithConfig, FakeAdapter, Permissions], Orchestrator]
@@ -170,10 +183,13 @@ class EvalRunner:
                 await self._setup(sc.setup, cfg, sandbox, adapter, orch)
                 run = await self._drive(orch, sc, sandbox)
                 run.timers_running = len(orch.timers.list())
+                if orch.memory is not None:
+                    run.facts = [f.text for f in orch.memory.facts(1000)]
             finally:
                 await orch.close()
             latency = time.perf_counter() - started
             failures = check(sc, run, adapter, cfg, sandbox)
+            failures += _check_memory(sc.expect_state, run.facts)
         return Outcome(
             id=sc.id,
             passed=not failures,
@@ -216,6 +232,24 @@ class EvalRunner:
             )
         for label, seconds in setup.timers.items():
             orch.timers.set(seconds, label)
+        if orch.memory is not None:
+            from datetime import UTC, datetime, timedelta
+
+            from edith.evals.docs import make_docx, make_pdf
+
+            for seed in setup.memories:
+                when = datetime.now(UTC) - timedelta(days=seed.days_ago)
+                orch.memory.remember(
+                    seed.text, seed.kind, created_at=when.isoformat(timespec="seconds")
+                )
+            for rel, pages in setup.pdfs.items():
+                (sandbox / rel).parent.mkdir(parents=True, exist_ok=True)
+                make_pdf(sandbox / rel, pages)
+            for rel, paragraphs in setup.docx.items():
+                (sandbox / rel).parent.mkdir(parents=True, exist_ok=True)
+                make_docx(sandbox / rel, paragraphs)
+            for rel in setup.index:
+                orch.memory.index_folder((sandbox / rel).resolve(), orch.scope)
         for entry in setup.audit:
             orch.audit.outcome(
                 str(entry.get("tool", "")), "setup", bool(entry.get("ok", True)),
@@ -252,6 +286,18 @@ class EvalRunner:
             run.timed_out = True
             await orch.stop(req.session_id)
         return run
+
+
+def _check_memory(st: ExpectState, facts: list[str]) -> list[str]:
+    f: list[str] = []
+    low = [x.lower() for x in facts]
+    for want in st.memory_contains:
+        if not any(want.lower() in x for x in low):
+            f.append(f"no saved fact contains {want!r} (facts: {facts[:5]})")
+    for gone in st.memory_missing:
+        if any(gone.lower() in x for x in low):
+            f.append(f"a saved fact still contains {gone!r}")
+    return f
 
 
 def _first_options(ev: QuestionEvent) -> dict[str, str]:

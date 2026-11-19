@@ -318,8 +318,8 @@ async def test_stop_cancels_within_one_second(
             events.append(ev)
 
     task = asyncio.create_task(consume())
-    for _ in range(100):  # the brain starts lazily on the first request
-        await asyncio.sleep(0)
+    for _ in range(300):  # the brain starts lazily (after the memory lookup thread)
+        await asyncio.sleep(0.01)
         if factory.client is not None:
             break
     assert factory.client is not None

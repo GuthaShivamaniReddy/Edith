@@ -6,7 +6,8 @@ import asyncio
 import contextlib
 import shutil
 import sys
-from typing import Annotated
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
@@ -36,9 +37,19 @@ from edith.safety.confirm import GrantScope
 from edith.safety.policy import PolicyError
 from edith.tools.registry import RegistryError
 
+if TYPE_CHECKING:
+    from edith.memory.store import IndexReport, MemoryStore
+
 app = typer.Typer(help="EDITH - your personal AI assistant.", no_args_is_help=True)
 secrets_app = typer.Typer(help="Manage secrets in the OS keychain.", no_args_is_help=True)
 app.add_typer(secrets_app, name="secrets")
+memory_app = typer.Typer(help="See and control what EDITH remembers.", no_args_is_help=True)
+app.add_typer(memory_app, name="memory")
+index_app = typer.Typer(
+    help="Choose document folders EDITH can search (PDF, Word, Markdown, text).",
+    no_args_is_help=True,
+)
+app.add_typer(index_app, name="index")
 
 console = Console()
 err = Console(stderr=True)
@@ -355,3 +366,172 @@ def secrets_list() -> None:
 
 if __name__ == "__main__":
     app()
+
+
+# ---------------------------------------------------------------------- memory
+
+
+def _memory(cfg: EdithConfig) -> MemoryStore:
+    from edith.memory.embed import get_embedder
+    from edith.memory.store import MemoryStore
+
+    if not cfg.memory.enabled:
+        err.print("Memory is switched off (memory.enabled in config/edith.yaml).")
+        raise typer.Exit(1)
+    return MemoryStore(cfg.memory_db, get_embedder(cfg))
+
+
+@memory_app.command("list")
+def memory_list() -> None:
+    """Everything EDITH has saved about you, with ids."""
+    cfg = _setup()
+    store = _memory(cfg)
+    try:
+        facts, episodes = store.facts(1000), store.episodes(20)
+    finally:
+        store.close()
+    if not facts and not episodes:
+        console.print("Memory is empty.")
+        return
+    for f in facts:
+        console.print(
+            f"[bold]{f.ref}[/bold] {escape(f.text)} [dim]({f.kind}, {f.created_at[:10]}, "
+            f"{escape(f.source)})[/dim]"
+        )
+    if episodes:
+        console.print("\n[bold]Recent conversations[/bold]")
+        for e in episodes:
+            console.print(
+                f"[bold]{e.ref}[/bold] [dim]{e.created_at[:10]}[/dim] {escape(e.summary)}"
+            )
+    console.print(f"\n[dim]{len(facts)} facts in {cfg.memory_db}[/dim]")
+
+
+@memory_app.command("forget")
+def memory_forget(
+    ids: Annotated[list[str], typer.Argument(help="Ids from `edith memory list`, e.g. f3 e1")],
+) -> None:
+    """Delete memories for good."""
+    cfg = _setup()
+    store = _memory(cfg)
+    try:
+        gone = store.forget(ids)
+    finally:
+        store.close()
+    if not gone:
+        console.print("No memories with those ids.")
+    for g in gone:
+        console.print(f"Deleted {g.ref}")
+
+
+@memory_app.command("clear")
+def memory_clear(
+    yes: Annotated[bool, typer.Option("--yes", help="Skip the confirmation.")] = False,
+) -> None:
+    """Forget every fact and conversation summary (the document index stays)."""
+    cfg = _setup()
+    if not yes and not typer.confirm("Delete everything EDITH remembers about you?"):
+        raise typer.Exit(1)
+    store = _memory(cfg)
+    try:
+        n = store.clear()
+    finally:
+        store.close()
+    console.print(f"Deleted {n} memories.")
+
+
+# ---------------------------------------------------------------------- document index
+
+
+@index_app.command("add")
+def index_add(
+    folder: Annotated[str, typer.Argument(help="A folder inside files.allowed_roots.")],
+) -> None:
+    """Index a folder now (only when you run this; nothing is watched in the background)."""
+    from edith.memory.knowledge import ExtractError, check_folder
+    from edith.safety.scope import FileScope
+
+    cfg = _setup()
+    scope = FileScope.from_config(cfg)
+    try:
+        path = check_folder(folder, scope)
+    except ExtractError as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
+    store = _memory(cfg)
+    try:
+        with console.status("Indexing...") as st:
+            report = store.index_folder(path, scope, lambda name: st.update(f"Indexed {name}"))
+    finally:
+        store.close()
+    _print_report(report)
+
+
+@index_app.command("refresh")
+def index_refresh() -> None:
+    """Re-read changed files in every indexed folder and drop deleted ones."""
+    from edith.memory.knowledge import ExtractError, check_folder
+    from edith.safety.scope import FileScope
+
+    cfg = _setup()
+    scope = FileScope.from_config(cfg)
+    store = _memory(cfg)
+    try:
+        folders = [f[0] for f in store.folders()]
+        if not folders:
+            console.print("No folders indexed. Add one with `edith index add <folder>`.")
+        for folder in folders:
+            try:
+                path = check_folder(folder, scope)
+            except ExtractError as e:
+                err.print(f"[yellow]Skipping {folder}: {e}[/yellow]")
+                continue
+            with console.status(f"Refreshing {folder}..."):
+                _print_report(store.index_folder(path, scope))
+    finally:
+        store.close()
+
+
+@index_app.command("list")
+def index_list() -> None:
+    """Indexed folders with their document and passage counts."""
+    cfg = _setup()
+    store = _memory(cfg)
+    try:
+        rows = store.folders()
+    finally:
+        store.close()
+    if not rows:
+        console.print("No folders indexed. Add one with `edith index add <folder>`.")
+    for path, docs, chunks, when in rows:
+        console.print(
+            f"{path}  [dim]{docs} documents, {chunks} passages, indexed {when or '-'}[/dim]"
+        )
+
+
+@index_app.command("remove")
+def index_remove(
+    folder: Annotated[str, typer.Argument(help="As shown by `edith index list`.")],
+) -> None:
+    """Stop indexing a folder and delete everything indexed from it."""
+    cfg = _setup()
+    store = _memory(cfg)
+    try:
+        known = {f[0] for f in store.folders()}
+        target = folder if folder in known else str(Path(folder).expanduser().resolve())
+        if target not in known:
+            err.print(f"{folder} is not indexed.")
+            raise typer.Exit(1)
+        n = store.remove_folder(target)
+    finally:
+        store.close()
+    console.print(f"Removed {target} ({n} documents deleted from the index).")
+
+
+def _print_report(r: IndexReport) -> None:
+    console.print(
+        f"{r.folder}: {r.added} added, {r.updated} updated, {r.unchanged} unchanged, "
+        f"{r.removed} removed ({r.chunks} passages)"
+    )
+    for e in r.errors[:20]:
+        err.print(f"[yellow]  skipped {escape(e)}[/yellow]")

@@ -31,7 +31,6 @@ def user_tz(cfg: EdithConfig) -> ZoneInfo:
 def render_system_prompt(
     cfg: EdithConfig,
     source: Source = "cli",
-    memories: str = "",
     now: datetime | None = None,
 ) -> str:
     template = (PROMPTS_DIR / "system.md").read_text(encoding="utf-8")
@@ -43,6 +42,5 @@ def render_system_prompt(
         now=now.strftime("%A, %B %d, %Y, %I:%M %p"),
         timezone=cfg.user.timezone,
         city=cfg.user.city or "unknown",
-        memories=memories or "nothing yet (memory arrives in Phase 2)",
         source=_SOURCE_LABEL[source],
     )

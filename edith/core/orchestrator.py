@@ -1,9 +1,11 @@
 """Orchestrator: runs every request, whichever face it came from (PLAN.md section 6).
 
 For each request: start a trace -> kill switch / fast path -> daily budget ->
-route to a model -> run the session's brain with a per-request cost cap ->
-record cost. Sessions are independent conversations (one brain and one set of
-access grants each). Timers and other out-of-band events go to subscribers.
+attach relevant memories -> route to a model -> run the session's brain with a
+per-request cost cap -> record cost. When a session ends, the fast model learns
+facts from what the user said in it (memory.auto_extract). Sessions are
+independent conversations (one brain and one set of access grants each).
+Timers and other out-of-band events go to subscribers.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import structlog
 from edith.config import EdithConfig, config_dir
 from edith.core import fastpath
 from edith.core.brain import Brain
-from edith.core.brain.claude_brain import ClaudeBrain
+from edith.core.brain.claude_brain import ClaudeBrain, complete_once
 from edith.core.events import (
     ErrorEvent,
     Event,
@@ -31,6 +33,9 @@ from edith.core.events import (
 )
 from edith.core.prompts import user_tz
 from edith.core.router import route
+from edith.memory.embed import get_embedder
+from edith.memory.extractor import Complete, Completion, extract_session
+from edith.memory.store import MemoryStore
 from edith.observability.costs import CostLedger, CostRecord, Usage
 from edith.observability.logging import get_logger, new_trace
 from edith.safety.audit import AuditLog
@@ -59,6 +64,7 @@ class Session:
     brain: Brain | None = None
     busy: bool = False
     last_used: float = 0.0
+    said: list[str] = dataclasses.field(default_factory=list)  # user's messages, for memory
 
 
 class Orchestrator:
@@ -69,6 +75,8 @@ class Orchestrator:
         adapter: SystemAdapter | None = None,
         permissions: Permissions | None = None,
         brain_factory: BrainFactory | None = None,
+        memory: MemoryStore | None = None,
+        complete: Complete | None = None,
     ) -> None:
         self.cfg = cfg
         self.permissions = permissions or Permissions.load(config_dir() / "permissions.yaml")
@@ -78,7 +86,13 @@ class Orchestrator:
         self.ledger = CostLedger(cfg.data_dir / "costs.jsonl")
         self.timers = TimerService(self.publish)
         self.adapter = adapter or get_adapter()
-        self.ctx = ToolContext(cfg, self.adapter, self.scope, self.timers, self.audit)
+        self.memory = memory
+        if self.memory is None and cfg.memory.enabled:
+            self.memory = MemoryStore(cfg.memory_db, get_embedder(cfg))
+        self._complete: Complete = complete or self._complete_once
+        self.ctx = ToolContext(
+            cfg, self.adapter, self.scope, self.timers, self.audit, memory=self.memory
+        )
         self.registry = ToolRegistry(
             self.ctx,
             self.permissions,
@@ -98,6 +112,9 @@ class Orchestrator:
             source=source,
             cost_sink=self._record_cost,
         )
+
+    async def _complete_once(self, system: str, prompt: str, model: str) -> Completion:
+        return await complete_once(self.cfg, system, prompt, model)
 
     def session(self, session_id: str, source: Source = "cli") -> Session:
         s = self._sessions.get(session_id)
@@ -135,6 +152,27 @@ class Orchestrator:
         s.gate.grants.revoke_all()
         if s.brain is not None:
             await s.brain.close()
+        await self._learn(s)
+
+    async def _learn(self, s: Session) -> None:
+        """After a conversation: store facts and a summary from what the user said."""
+        if (
+            self.memory is None
+            or not self.cfg.memory.auto_extract
+            or not s.said
+            or s.source in ("eval", "scheduler")
+        ):
+            return
+        if self.ledger.totals(tz=user_tz(self.cfg)).today_usd >= self.cfg.budgets.per_day_usd:
+            log.info("memory_extract_skipped", reason="daily budget reached")
+            return
+
+        def on_cost(c: Completion) -> None:
+            self._record_cost(c.cost_usd, c.usage, c.model)
+
+        await extract_session(
+            self.memory, self._complete, self.cfg.models.fast, s.id, list(s.said), on_cost
+        )
 
     def revoke_grants(self, session_id: str) -> list[str]:
         s = self._sessions.get(session_id)
@@ -183,6 +221,22 @@ class Orchestrator:
                 "budgets.per_day_usd in config/edith.yaml or try again tomorrow."
             )
             return
+
+        s.said.append(req.text)
+        if self.memory is not None:
+            try:
+                context = await asyncio.to_thread(
+                    self.memory.context_for,
+                    req.text,
+                    self.cfg.memory.inject_all_up_to,
+                    self.cfg.memory.inject_top_k,
+                    self.cfg.memory.inject_episodes,
+                )
+            except Exception:
+                log.exception("memory_context_failed")
+                context = ""
+            if context:
+                req = dataclasses.replace(req, context=context)
 
         r = route(req, self.cfg)
         log.info("routed", route=r.kind, model=r.model, reason=r.reason)
@@ -297,3 +351,5 @@ class Orchestrator:
         self.broker.cancel_session(None)
         for sid in list(self._sessions):
             await self.end_session(sid)
+        if self.memory is not None:
+            self.memory.close()
