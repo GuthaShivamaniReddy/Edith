@@ -18,3 +18,4 @@ supersedes the old one rather than editing history.
 | [0010](0010-phase-0-runtime-decisions.md) | Phase 0 runtime decisions |
 | [0011](0011-phase-1-safety-and-tools.md) | Phase 1: safety gate, privacy grants, tools and routing |
 | [0012](0012-windows-desktop-window.md) | A light Windows window before the Phase 7 HUD |
+| [0013](0013-phase-2-memory.md) | Phase 2: memory and the document index |

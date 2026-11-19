@@ -4,9 +4,10 @@ A personal AI assistant that runs as a service on your own computer. Claude (thr
 Claude Agent SDK) is the brain, every ability is a tool behind a permission gate, and your
 data stays on your machine. The full plan is in [docs/PLAN.md](docs/PLAN.md).
 
-**Status: Phase 1 (text agent and core tools).** EDITH chats in the terminal, a web page
-or its own Windows window; uses web search, scoped files, system control, notes and timers
-behind a safety gate that asks before anything risky; and records the cost of every reply.
+**Status: Phase 2 (memory).** EDITH chats in the terminal, a web page or its own Windows
+window; uses web search, scoped files, system control, notes and timers behind a safety
+gate that asks before anything risky; remembers what you tell it across restarts; answers
+questions about your own documents with citations; and records the cost of every reply.
 
 ## Setup (Windows, macOS or Linux)
 
@@ -47,6 +48,10 @@ uv run edith secrets list                    # shows which are set, never values
 | `edith app` | Windows window with a tray icon. Closing hides it; Quit is in the tray menu. |
 | `edith serve` | Local WebSocket API and web page on http://127.0.0.1:8765. |
 | `edith eval` | Task eval suite on the real model (costs money; `--only`, `--max-cost`). |
+| `edith memory list` | Everything EDITH remembers about you, with ids. |
+| `edith memory forget <id>...` / `clear` | Delete memories for good (no model needed). |
+| `edith index add <folder>` | Index a folder (PDF, Word, Markdown, text) so EDITH can search it. |
+| `edith index list` / `refresh` / `remove <folder>` | See, re-read or drop indexed folders. |
 | `edith costs` | Today's and this month's spend, against the daily cap. |
 | `edith status` | Config, data dir, model, credential source. No model call. |
 | `edith secrets set/list/delete` | Manage secrets in the OS keychain. |
@@ -56,6 +61,15 @@ uv run edith secrets list                    # shows which are set, never values
 - `config/edith.yaml`: your name, models, budgets, paths. No secrets.
 - `config/permissions.yaml`: tool → permission tier (used from Phase 1).
 - `config/mcp_servers.yaml`: external MCP servers (used from Phase 1).
+
+### Memory and privacy
+
+Memory is one local file, `~/.edith/memory.db`. EDITH saves a fact when you say "remember ...",
+and after each conversation it learns facts from **your own messages only** (turn this off
+with `memory.auto_extract: false`). "What do you know about me?" lists them. "Forget ..." asks
+you first, then deletes them for good. Documents are searched only in folders you add
+with `edith index add`, only after you grant access in that session, and only re-read when
+you run `edith index refresh`. Embeddings run on your machine (the 65 MB model downloads once).
 
 Runtime data goes to `~/.edith` (override with `EDITH_DATA_DIR`):
 `logs/edith.jsonl` (one JSON line per event, with a trace ID per request) and
