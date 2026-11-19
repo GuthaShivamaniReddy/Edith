@@ -166,15 +166,28 @@ async def test_files_tools_recheck_scope(registry: ToolRegistry, sandbox: Path) 
     assert not ok
 
 
-async def test_files_read_rejects_binary_and_later_phase(
+async def test_files_read_documents_and_rejects_binary(
     registry: ToolRegistry, sandbox: Path
 ) -> None:
-    (sandbox / "docs" / "a.pdf").write_bytes(b"%PDF")
+    from edith.evals.docs import make_docx, make_pdf
+
+    make_docx(sandbox / "docs" / "letter.docx", ["Dear Shiv,", "The meeting moved to Tuesday."])
+    make_pdf(sandbox / "docs" / "manual.pdf", ["Intro", "Hold the button for 5 seconds."])
+    (sandbox / "docs" / "broken.pdf").write_bytes(b"%PDF")
+    (sandbox / "docs" / "sheet.xlsx").write_bytes(b"PK")
     (sandbox / "docs" / "b.txt").write_bytes(b"\x00\x01\x02")
-    assert (
-        "Phase 2"
-        in (await registry.call("files.read", {"path": str(sandbox / "docs" / "a.pdf")}))[1]
-    )
+
+    async def read(name: str) -> tuple[bool, str]:
+        return await registry.call("files.read", {"path": str(sandbox / "docs" / name)})
+
+    ok, text = await read("letter.docx")
+    assert ok and "meeting moved to Tuesday" in text and "untrusted data" in text
+    ok, text = await read("manual.pdf")
+    assert ok and "--- page 2 ---" in text and "5 seconds" in text
+    ok, text = await read("broken.pdf")
+    assert not ok and "Could not read" in text
+    ok, text = await read("sheet.xlsx")
+    assert not ok and "can't read .xlsx" in text
     assert (
         "binary"
         in (await registry.call("files.read", {"path": str(sandbox / "docs" / "b.txt")}))[1]

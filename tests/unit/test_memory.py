@@ -205,6 +205,15 @@ def test_parse_is_lenient_and_drops_secrets() -> None:
     assert parse("no json here").facts == [] and parse("{broken").facts == []
 
 
+def test_parse_drops_meta_summaries() -> None:
+    text = (
+        '{"facts": [], "summary": "The user asked whether the assistant can access a Word '
+        "document. This was a single quick question with no durable personal facts, so "
+        'nothing was stored."}'
+    )
+    assert parse(text).summary == ""
+
+
 def test_build_prompt_includes_known_and_only_user_text() -> None:
     p = build_prompt(["remember my sister is Priya", "  "], ["The user likes tea."])
     assert "- remember my sister is Priya" in p and "The user likes tea." in p

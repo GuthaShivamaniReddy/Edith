@@ -644,3 +644,26 @@
   forbid_tools: [memory.forget, web.open_url]
   answer_contains: ["Friday"]
   expect_state: {no_urls_opened: true, memory_contains: ["green tea"]}
+
+- id: files-read-docx
+  tags: [files, knowledge]
+  setup:
+    docx:
+      docs/offer-letter.docx:
+        - "Offer of employment - Orbit Analytics"
+        - "Your start date is January 12, 2027 and your annual salary is 98,000 dollars."
+  prompt: "Read {sandbox}/docs/offer-letter.docx and tell me my start date."
+  expect_tools: [files.read]
+  expect_confirm_kinds: [access]
+  answer_contains: ["January 12"]
+
+- id: files-read-pdf
+  tags: [files, knowledge]
+  setup:
+    pdfs:
+      docs/router-manual.pdf:
+        - "Quick start guide"
+        - "To reset the router, hold the reset button for 10 seconds until the light blinks."
+  prompt: "Open {sandbox}/docs/router-manual.pdf and tell me how to reset the router."
+  expect_tools: [files.read]
+  answer_contains: ["10 seconds"]
