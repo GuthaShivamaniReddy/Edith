@@ -30,6 +30,11 @@ tools:
   timers.list: 0
   timers.cancel: 1
   activity.today: 0
+  memory.remember: 1       # asks instead if web/file content was read earlier in the request
+  memory.recall: 0
+  memory.list: 0
+  memory.forget: 2         # always asks, showing the exact memories; deletes them for good
+  knowledge.search: 0      # needs a "documents" access grant each session
   # Later phases
   calendar.list_events: 0
   calendar.create_event: 2
@@ -51,6 +56,7 @@ access:
   system.stats:   {scope: system_info, session: true}
   clipboard.read: {scope: clipboard, session: false}   # no passive clipboard watching
   system.screenshot: {scope: screen, session: false}   # no passive screen watching
+  knowledge.search: {scope: documents, session: true}  # your indexed document folders
 
 # PRIVACY: tools whose output contains data from this computer. After one of these runs,
 # every outbound tool below needs your confirmation, showing exactly what would be sent.
@@ -64,6 +70,7 @@ local_data:
   - notes.list
   - notes.read
   - activity.today
+  - knowledge.search
 
 # Tools that send data off this computer (to the web).
 outbound:
@@ -81,3 +88,4 @@ untrusted_output:
   - files.read
   - clipboard.read
   - notes.read
+  - knowledge.search

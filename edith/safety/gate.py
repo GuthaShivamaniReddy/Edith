@@ -160,5 +160,6 @@ def _grant_label(scope: str, target: str) -> str:
         "system_info": "system information",
         "clipboard": "your clipboard",
         "screen": "your screen",
+        "documents": "your indexed documents",
     }
     return labels.get(scope, scope)
