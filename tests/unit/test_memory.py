@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -454,24 +455,27 @@ def test_cli_memory_and_index(
     store.close()
     runner = CliRunner()
 
+    def flat(res: Any) -> str:  # rich wraps long lines at the terminal width
+        return " ".join(str(res.output).split())
+
     res = runner.invoke(cli.app, ["memory", "list"])
-    assert res.exit_code == 0 and "Miso" in res.output and "2 facts" in res.output
+    assert res.exit_code == 0 and "Miso" in flat(res) and "2 facts" in flat(res)
     res = runner.invoke(cli.app, ["memory", "forget", "f1"])
-    assert res.exit_code == 0 and "Deleted f1" in res.output
-    assert "Miso" not in runner.invoke(cli.app, ["memory", "list"]).output
+    assert res.exit_code == 0 and "Deleted f1" in flat(res)
+    assert "Miso" not in flat(runner.invoke(cli.app, ["memory", "list"]))
     assert runner.invoke(cli.app, ["memory", "clear"], input="n\n").exit_code == 1
     res = runner.invoke(cli.app, ["memory", "clear", "--yes"])
-    assert "Deleted 1 memories" in res.output
+    assert "Deleted 1 memories" in flat(res)
 
     (sandbox / "kb").mkdir()
     (sandbox / "kb" / "a.md").write_text("The warranty lasts 3 years.", encoding="utf-8")
     res = runner.invoke(cli.app, ["index", "add", str(sandbox / "kb")])
-    assert res.exit_code == 0 and "1 added" in res.output, res.output
+    assert res.exit_code == 0 and "1 added" in flat(res), flat(res)
     res = runner.invoke(cli.app, ["index", "list"])
-    assert "1 documents" in res.output
+    assert "1 documents" in flat(res)
     res = runner.invoke(cli.app, ["index", "refresh"])
-    assert "1 unchanged" in res.output
+    assert "1 unchanged" in flat(res)
     assert runner.invoke(cli.app, ["index", "add", str(sandbox / "private")]).exit_code == 1
     res = runner.invoke(cli.app, ["index", "remove", str(sandbox / "kb")])
-    assert res.exit_code == 0 and "1 documents deleted" in res.output
-    assert "No folders indexed" in runner.invoke(cli.app, ["index", "list"]).output
+    assert res.exit_code == 0 and "1 documents deleted" in flat(res)
+    assert "No folders indexed" in flat(runner.invoke(cli.app, ["index", "list"]))
