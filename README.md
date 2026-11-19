@@ -1,12 +1,12 @@
-﻿# EDITH
+# EDITH
 
 A personal AI assistant that runs as a service on your own computer. Claude (through the
 Claude Agent SDK) is the brain, every ability is a tool behind a permission gate, and your
 data stays on your machine. The full plan is in [docs/PLAN.md](docs/PLAN.md).
 
-**Status: Phase 0 (foundations).** EDITH can hold a multi-turn conversation in the terminal,
-streams its replies, and records the cost of each one. It has no tools yet by design: the
-safety gate (Phase 1) comes before anything that can act.
+**Status: Phase 1 (text agent and core tools).** EDITH chats in the terminal, a web page
+or its own Windows window; uses web search, scoped files, system control, notes and timers
+behind a safety gate that asks before anything risky; and records the cost of every reply.
 
 ## Setup (Windows, macOS or Linux)
 
@@ -22,8 +22,12 @@ safety gate (Phase 1) comes before anything that can act.
 3. Talk to it:
 
    ```sh
-   uv run edith chat
+   uv run edith chat        # terminal
+   uv run edith app         # Windows window with a tray icon
    ```
+
+   On Windows, `uv run edith app --shortcut` adds EDITH to the Start menu (pin it to the
+   taskbar from there); `--remove-shortcut` takes it out again.
 
 ### Credentials
 
@@ -40,6 +44,9 @@ uv run edith secrets list                    # shows which are set, never values
 | Command | What it does |
 |---|---|
 | `edith chat` | Terminal conversation. `/costs` shows spend, `/exit` leaves. |
+| `edith app` | Windows window with a tray icon. Closing hides it; Quit is in the tray menu. |
+| `edith serve` | Local WebSocket API and web page on http://127.0.0.1:8765. |
+| `edith eval` | Task eval suite on the real model (costs money; `--only`, `--max-cost`). |
 | `edith costs` | Today's and this month's spend, against the daily cap. |
 | `edith status` | Config, data dir, model, credential source. No model call. |
 | `edith secrets set/list/delete` | Manage secrets in the OS keychain. |

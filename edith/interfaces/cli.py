@@ -225,6 +225,46 @@ def serve() -> None:
     uvicorn.run(create_app(cfg), host=cfg.server.host, port=cfg.server.port, log_level="warning")
 
 
+@app.command("app")
+def desktop_app(
+    shortcut: Annotated[
+        bool, typer.Option("--shortcut", help="Add EDITH to the Start menu, then exit.")
+    ] = False,
+    remove_shortcut: Annotated[
+        bool, typer.Option("--remove-shortcut", help="Remove the Start-menu entry, then exit.")
+    ] = False,
+) -> None:
+    """Open EDITH in its own window, with a tray icon (Windows)."""
+    from edith.interfaces import desktop
+    from edith.tools.system import get_adapter
+    from edith.tools.system.base import AdapterError
+
+    cfg = _setup()
+    if shortcut or remove_shortcut:
+        adapter = get_adapter()
+        try:
+            if remove_shortcut:
+                gone = adapter.remove_shortcut(desktop.APP_NAME)
+                console.print(f"Removed {gone}" if gone else "No Start-menu entry to remove.")
+            else:
+                icon = desktop.write_icon(cfg.data_dir / "edith.ico")
+                target, args = desktop.launcher()
+                link = adapter.install_shortcut(
+                    desktop.APP_NAME, target, args, config_dir().parent, icon
+                )
+                console.print(f"Added [bold]{link}[/bold]. Find EDITH in the Start menu.")
+        except AdapterError as e:
+            err.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from e
+        return
+    console.print("Opening the EDITH window. Quit from the tray icon.")
+    try:
+        desktop.run(cfg)
+    except desktop.DesktopError as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
+
+
 @app.command("eval")
 def eval_(
     only: Annotated[

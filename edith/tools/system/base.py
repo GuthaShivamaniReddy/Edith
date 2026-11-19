@@ -6,6 +6,7 @@ command is a fixed template with validated arguments - never a shell string.
 
 from __future__ import annotations
 
+import re
 import time
 import webbrowser
 from abc import ABC, abstractmethod
@@ -29,6 +30,16 @@ def validate_url(url: str) -> str:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise AdapterError("Only http:// and https:// web addresses can be opened.")
     return parsed.geturl()
+
+
+SHORTCUT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,40}$")
+
+
+def validate_shortcut_name(name: str) -> str:
+    """A plain file name: no separators, dots or drive letters can sneak in."""
+    if not SHORTCUT_NAME.match(name):
+        raise AdapterError(f"Invalid shortcut name {name!r}.")
+    return name
 
 
 class SystemAdapter(ABC):
@@ -67,6 +78,19 @@ class SystemAdapter(ABC):
 
     def clipboard_write(self, text: str) -> None:
         pyperclip.copy(text)
+
+    def install_shortcut(
+        self, name: str, target: Path, args: list[str], workdir: Path, icon: Path | None
+    ) -> Path:
+        """Add an app launcher (Start menu on Windows); return where it was written.
+
+        Used by `edith app --shortcut`, never by the model.
+        """
+        raise AdapterError(f"App shortcuts are not supported on {self.name} yet.")
+
+    def remove_shortcut(self, name: str) -> Path | None:
+        """Remove the launcher added by install_shortcut; return its path if one existed."""
+        raise AdapterError(f"App shortcuts are not supported on {self.name} yet.")
 
     def stats(self) -> dict[str, Any]:
         vm = psutil.virtual_memory()

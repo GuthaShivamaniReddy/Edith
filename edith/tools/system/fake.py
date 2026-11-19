@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from edith.tools.system.base import SystemAdapter, validate_url
+from edith.tools.system.base import SystemAdapter, validate_shortcut_name, validate_url
 
 
 class FakeAdapter(SystemAdapter):
@@ -19,6 +19,7 @@ class FakeAdapter(SystemAdapter):
         self.clipboard = ""
         self.screenshots: list[Path] = []
         self.trashed: list[Path] = []
+        self.shortcuts: dict[str, dict[str, Any]] = {}
 
     def get_volume(self) -> int:
         return self.volume
@@ -50,6 +51,18 @@ class FakeAdapter(SystemAdapter):
         else:
             path.unlink()
         self.trashed.append(path)
+
+    def install_shortcut(
+        self, name: str, target: Path, args: list[str], workdir: Path, icon: Path | None
+    ) -> Path:
+        link = Path("start-menu") / f"{validate_shortcut_name(name)}.lnk"
+        self.shortcuts[name] = {"target": target, "args": args, "workdir": workdir, "icon": icon}
+        return link
+
+    def remove_shortcut(self, name: str) -> Path | None:
+        if self.shortcuts.pop(validate_shortcut_name(name), None) is None:
+            return None
+        return Path("start-menu") / f"{name}.lnk"
 
     def clipboard_read(self) -> str:
         return self.clipboard

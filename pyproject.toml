@@ -12,10 +12,13 @@ dependencies = [
     "fastapi==0.162.4",
     "keyring==25.7.0",
     "mss==10.2.0",
+    "pillow==13.0.0",
     "psutil==7.2.2",
     "pycaw==20260927 ; sys_platform == 'win32'",
     "pydantic==2.14.3",
     "pyperclip==1.11.0",
+    "pystray==0.19.5 ; sys_platform == 'win32'",
+    "pywebview==6.2.1 ; sys_platform == 'win32'",
     "pyyaml==6.0.3",
     "rich==15.0.0",
     "send2trash==2.1.0",
@@ -65,7 +68,7 @@ files = ["edith", "tests"]
 
 [[tool.mypy.overrides]]
 # Untyped third-party libraries (pycaw/comtypes exist only on Windows).
-module = ["pyperclip", "send2trash", "pycaw.*", "comtypes", "mss", "mss.*"]
+module = ["pyperclip", "send2trash", "pycaw.*", "comtypes", "comtypes.*", "mss", "mss.*", "pystray", "webview", "webview.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
