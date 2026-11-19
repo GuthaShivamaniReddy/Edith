@@ -41,6 +41,7 @@ apps:
   explorer: explorer.exe
   task manager: taskmgr.exe
   settings: "ms-settings:"
+  word: winword.exe
 
 server:
   host: 127.0.0.1             # the API never listens beyond this computer
