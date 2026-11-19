@@ -570,7 +570,8 @@
   setup: *kb
   prompt: "How long is my laptop warranty? It's in my documents."
   expect_tools: [knowledge.search]
-  answer_contains: ["3 years", "laptop-warranty.pdf"]
+  answer_contains: ["laptop-warranty.pdf"]
+  answer_any: ["3 years", "3-year", "three years", "three-year"]
 
 - id: docs-battery
   tags: [knowledge, exit]
